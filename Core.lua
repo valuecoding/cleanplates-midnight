@@ -778,6 +778,18 @@ local function setNumericCVarIfDifferent(cvarName, value)
     end
 end
 
+local function setNumericCVarsIfDifferent(cvarNames, value)
+    if type(cvarNames) ~= "table" then
+        return
+    end
+    for i = 1, #cvarNames do
+        local cvarName = cvarNames[i]
+        if type(cvarName) == "string" and cvarName ~= "" then
+            setNumericCVarIfDifferent(cvarName, value)
+        end
+    end
+end
+
 local function getCVarBitfieldValue(cvarName, bitIndex)
     if not C_CVar or type(C_CVar.GetCVarBitfield) ~= "function" then
         return nil
@@ -1575,6 +1587,7 @@ function CleanPlates:ApplyNameplateApiSizes(globalScale, horizontalScale, vertic
     end
 
     if applied then
+        local verifyTolerance = 2.0
         local requestedChecks = 0
         local verifiedChecks = 0
 
@@ -1582,7 +1595,7 @@ function CleanPlates:ApplyNameplateApiSizes(globalScale, horizontalScale, vertic
             requestedChecks = requestedChecks + 1
             local ok, width, height = pcall(C_NamePlate.GetNamePlateSize)
             if ok and type(width) == "number" and type(height) == "number" then
-                if math.abs(width - requestedGeneralWidth) <= 0.5 and math.abs(height - requestedGeneralHeight) <= 0.5 then
+                if math.abs(width - requestedGeneralWidth) <= verifyTolerance and math.abs(height - requestedGeneralHeight) <= verifyTolerance then
                     verifiedChecks = verifiedChecks + 1
                 end
             end
@@ -1592,7 +1605,7 @@ function CleanPlates:ApplyNameplateApiSizes(globalScale, horizontalScale, vertic
             requestedChecks = requestedChecks + 1
             local ok, width, height = pcall(C_NamePlate.GetNamePlateEnemySize)
             if ok and type(width) == "number" and type(height) == "number" then
-                if math.abs(width - requestedEnemyWidth) <= 0.5 and math.abs(height - requestedEnemyHeight) <= 0.5 then
+                if math.abs(width - requestedEnemyWidth) <= verifyTolerance and math.abs(height - requestedEnemyHeight) <= verifyTolerance then
                     verifiedChecks = verifiedChecks + 1
                 end
             end
@@ -1602,15 +1615,14 @@ function CleanPlates:ApplyNameplateApiSizes(globalScale, horizontalScale, vertic
             requestedChecks = requestedChecks + 1
             local ok, width, height = pcall(C_NamePlate.GetNamePlateFriendlySize)
             if ok and type(width) == "number" and type(height) == "number" then
-                if math.abs(width - requestedFriendlyWidth) <= 0.5 and math.abs(height - requestedFriendlyHeight) <= 0.5 then
+                if math.abs(width - requestedFriendlyWidth) <= verifyTolerance and math.abs(height - requestedFriendlyHeight) <= verifyTolerance then
                     verifiedChecks = verifiedChecks + 1
                 end
             end
         end
 
         if requestedChecks > 0 and verifiedChecks == 0 then
-            applied = false
-            self:Debug("API size verification failed (no readback matched requested values)")
+            self:Debug("API size verification uncertain (no readback closely matched requested values)")
         end
     end
 
@@ -2117,22 +2129,19 @@ function CleanPlates:ApplyNameplateCVars()
     setAnyCVarIfDifferent({ "nameplateShowBuffsOnFriendly", "nameplateShowBuffsOnFriendlies" }, boolToCVar(showBuffsOnFriendly))
     self:ApplyAuraDisplayBitfields(showBuffsOnEnemy, showDebuffsOnEnemy, showBuffsOnFriendly, showDebuffsOnFriendly)
 
-    setNumericCVarIfDifferent("nameplateGlobalScale", globalScale)
-    setNumericCVarIfDifferent("NamePlateGlobalScale", globalScale)
-    setNumericCVarIfDifferent("nameplateHorizontalScale", horizontalScale)
-    setNumericCVarIfDifferent("NamePlateHorizontalScale", horizontalScale)
-    setNumericCVarIfDifferent("nameplateVerticalScale", appliedVerticalScale)
-    setNumericCVarIfDifferent("NamePlateVerticalScale", appliedVerticalScale)
-    setNumericCVarIfDifferent("nameplateOverlapH", xSpacing)
-    setNumericCVarIfDifferent("nameplateOverlapV", ySpacing)
-    setNumericCVarIfDifferent("nameplateSelectedScale", selectedScale)
-    setNumericCVarIfDifferent("nameplateMaxDistance", maxDistance)
+    setNumericCVarsIfDifferent({ "nameplateGlobalScale", "NamePlateGlobalScale" }, globalScale)
+    setNumericCVarsIfDifferent({ "nameplateHorizontalScale", "NamePlateHorizontalScale" }, horizontalScale)
+    setNumericCVarsIfDifferent({ "nameplateVerticalScale", "NamePlateVerticalScale" }, appliedVerticalScale)
+    setNumericCVarsIfDifferent({ "nameplateOverlapH", "NamePlateOverlapH" }, xSpacing)
+    setNumericCVarsIfDifferent({ "nameplateOverlapV", "NamePlateOverlapV" }, ySpacing)
+    setNumericCVarsIfDifferent({ "nameplateSelectedScale", "NamePlateSelectedScale" }, selectedScale)
+    setNumericCVarsIfDifferent({ "nameplateMaxDistance", "NamePlateMaxDistance" }, maxDistance)
     -- Keep distance-based auto-scaling from overriding manual size sliders.
-    setNumericCVarIfDifferent("nameplateMinScale", 1.0)
-    setNumericCVarIfDifferent("nameplateMaxScale", 1.0)
+    setNumericCVarsIfDifferent({ "nameplateMinScale", "NamePlateMinScale" }, 1.0)
+    setNumericCVarsIfDifferent({ "nameplateMaxScale", "NamePlateMaxScale" }, 1.0)
     -- Clients differ on selected-scale CVar names; apply both when available.
-    setNumericCVarIfDifferent("nameplateLargerScale", selectedScale)
-    setNumericCVarIfDifferent("nameplatePlayerLargerScale", selectedScale)
+    setNumericCVarsIfDifferent({ "nameplateLargerScale", "NamePlateLargerScale" }, selectedScale)
+    setNumericCVarsIfDifferent({ "nameplatePlayerLargerScale", "NamePlatePlayerLargerScale" }, selectedScale)
     self.effectiveGlobalScale = globalScale
     self.effectiveHorizontalScale = horizontalScale
     self.effectiveVerticalScale = appliedVerticalScale
@@ -2178,19 +2187,33 @@ function CleanPlates:SyncRootPlateTogglesFromCVars(changedCVarName, changedValue
 
     local changed = false
 
-    if isFriendlyRootCVar then
-        local newFriendlyRoot
-        if cvarName == "nameplateshowfriends" or cvarName == "nameplateshowfriendlyplayers" or cvarName == "nameplateshowfriendlynpcs" then
-            newFriendlyRoot = cvarToBool(changedValue, self.db.showFriendlyPlates)
-        else
-            local _, friendlyRootCVar = getFirstAvailableCVar({
-                "nameplateShowFriendlyPlayers",
-                "nameplateShowFriends",
-                "nameplateShowFriendlyNPCs",
-                "nameplateShowFriendlyNpcs",
-            })
-            newFriendlyRoot = cvarToBool(friendlyRootCVar, self.db.showFriendlyPlates)
+    local function readRootValue(candidates, fallback)
+        if type(candidates) ~= "table" then
+            return fallback == true
         end
+        for i = 1, #candidates do
+            local candidate = candidates[i]
+            if cvarName == string.lower(candidate) then
+                if changedValue ~= nil then
+                    return cvarToBool(changedValue, fallback)
+                end
+                local liveChanged = getCVarValue(candidate)
+                if liveChanged ~= nil then
+                    return cvarToBool(liveChanged, fallback)
+                end
+            end
+        end
+        local _, value = getFirstAvailableCVar(candidates)
+        return cvarToBool(value, fallback)
+    end
+
+    if isFriendlyRootCVar then
+        local newFriendlyRoot = readRootValue({
+            "nameplateShowFriendlyPlayers",
+            "nameplateShowFriends",
+            "nameplateShowFriendlyNPCs",
+            "nameplateShowFriendlyNpcs",
+        }, self.db.showFriendlyPlates)
         if self.db.showFriendlyPlates ~= newFriendlyRoot then
             self.db.showFriendlyPlates = newFriendlyRoot
             changed = true
@@ -2198,18 +2221,12 @@ function CleanPlates:SyncRootPlateTogglesFromCVars(changedCVarName, changedValue
     end
 
     if isEnemyRootCVar then
-        local newEnemyRoot
-        if cvarName == "nameplateshowenemies" or cvarName == "nameplateshowenemyplayers" or cvarName == "nameplateshowenemynpcs" then
-            newEnemyRoot = cvarToBool(changedValue, self.db.showEnemyPlates)
-        else
-            local _, enemyRootCVar = getFirstAvailableCVar({
-                "nameplateShowEnemyPlayers",
-                "nameplateShowEnemies",
-                "nameplateShowEnemyNPCs",
-                "nameplateShowEnemyNpcs",
-            })
-            newEnemyRoot = cvarToBool(enemyRootCVar, self.db.showEnemyPlates)
-        end
+        local newEnemyRoot = readRootValue({
+            "nameplateShowEnemyPlayers",
+            "nameplateShowEnemies",
+            "nameplateShowEnemyNPCs",
+            "nameplateShowEnemyNpcs",
+        }, self.db.showEnemyPlates)
         if self.db.showEnemyPlates ~= newEnemyRoot then
             self.db.showEnemyPlates = newEnemyRoot
             changed = true
@@ -3447,8 +3464,8 @@ CleanPlates:SetScript("OnEvent", function(self, event, ...)
         if not self.startupNoticeShown then
             self.startupNoticeShown = true
             self:Print(localizeText(
-                "Addon is in development. Feedback is welcome. Open settings with /cp.",
-                "Addon ist in Entwicklung. Feedback ist willkommen. Einstellungen mit /cp oeffnen."
+                "Addon is in development. Feedback via CurseForge comments or PN is welcome. Open settings with /cp.",
+                "Addon ist in Entwicklung. Feedback per CurseForge-Kommentar oder PN ist willkommen. Einstellungen mit /cp oeffnen."
             ))
         end
 
